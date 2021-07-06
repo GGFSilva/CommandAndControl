@@ -1,0 +1,263 @@
+Require Import Coq.Lists.List.
+Require Import Coq.Bool.Bool.
+
+Open Scope list_scope.
+
+Module ListNotations.
+Notation "[ ]" := nil (format "[ ]") : list_scope.
+Notation "[ x ]" := (cons x nil) : list_scope.
+Notation "[ x ; y ; .. ; z ]" := (cons x (cons y .. (cons z nil) ..)) : list_scope.
+End ListNotations.
+
+Import ListNotations.
+
+Section nets.
+
+  (*Função auxiliar utilizada em sort*)
+  Fixpoint insert (p : (nat * nat)) (l : list (nat * nat)) :=
+    match l with
+    | [] => [p]
+    | h :: t => if (Nat.ltb (fst p) (fst h)) then p :: h :: t
+                else if (Nat.eqb (fst p) (fst h)) && (Nat.ltb (snd p) (snd h)) then p :: h :: t
+                else h :: insert p t
+    end.
+
+  (*Função utilizada para ordenar a lista de arestas*)
+  Fixpoint sort (l : list (nat * nat)) : list (nat * nat) :=
+    match l with
+    | [] => []
+    | h :: t => insert h (sort t)
+    end.
+
+  (*Retorna o primeiro subordinado de um nó*)
+  Fixpoint get_second (edges : list (nat * nat)) (leader : nat) : nat :=
+    match edges with
+      | (a,b) :: edges' => if (Nat.eqb a leader)
+                           then b
+                           else get_second edges' leader
+      | nil => 0
+    end.
+
+  Fixpoint get_parent (edges : list (nat * nat)) (node : nat) : nat :=
+    match edges with
+      | (a,b) :: edges' => if (Nat.eqb node b) then a
+                           else get_parent edges' node
+      | nil => 0
+    end.
+
+  Fixpoint get_children (edges : list (nat * nat)) (node : nat) : list nat :=
+    match edges with
+      | (a,b) :: edges' => if (Nat.eqb node a) then b :: get_children edges' node
+                           else get_children edges' node
+      | nil => nil
+    end.
+
+  Fixpoint is_parent_func (edges : list (nat * nat)) (a b : nat) : Prop :=
+    match edges with
+      | nil => False
+      | h :: t => h = (a,b) \/ is_parent_func t a b
+    end.
+
+  (*A mesma função de cima, mas com bool*)
+  Fixpoint is_parent_func_bool (edges : list (nat * nat)) (a b : nat) : bool :=
+    match edges with
+      | nil => false
+      | h :: t => ((Nat.eqb (fst h) a) && (Nat.eqb (snd h) b)) || is_parent_func_bool t a b
+    end.
+
+  (*Para testar*)
+  Fixpoint list_sum (ls : list nat) : nat :=
+  match ls with
+    | nil => 0
+    | h :: ls' => h + list_sum ls'
+  end.
+
+  Fixpoint list_sum_times (ls : list nat) (n : nat) :=
+  match n with
+    | 0 => 0
+    | S n' => (list_sum ls) + list_sum_times ls n'
+  end.
+  (*Para testar*)
+
+  Fixpoint get_level_aux (edges : list (nat * nat)) (current_depth searched_node : nat) : nat := 
+  match edges with
+    | (a,b) :: edges' => if (Nat.eqb b searched_node) then get_level_aux edges' (current_depth + 1) a
+                         else get_level_aux edges' current_depth searched_node
+    | nil => current_depth
+  end.
+
+  (*Fixpoint get_level (edges : list (nat * nat)) (nodes times searched_node : nat) : nat := 
+  if (Nat.ltb nodes searched_node) then 0
+      else match times with
+        | 0 => 0
+        | S n => get_level edges nodes n searched_node + get_level_aux
+      end.*)
+
+  Definition get_node_order (node : nat) : nat := 10.
+
+  Structure net : Type := {
+                  nodes : nat ;
+                  leader : nat ;
+                  superior : list (nat * nat) ;
+                  knows : list (nat * nat) ;
+                  second_in_command : nat := get_second superior leader ;
+                  parent : nat -> nat := get_parent superior ;
+                  children : nat -> list nat := get_children superior ;
+                  is_parent :  nat -> nat -> Prop := is_parent_func superior;
+                  is_parent_bool :  nat -> nat -> bool := is_parent_func_bool superior;
+                  node_order : nat -> nat := get_node_order ;
+                  sorted_superior : list (nat * nat) := sort superior ;
+                  (*node_level : nat -> nat := get_level superior nodes (length superior);*)
+                  node_level' : nat -> nat := get_level_aux superior 1 ;
+            }.
+
+  (*Acrescentar definições: não há ciclos e a rede é conexa*)
+  (*Acrescentar ordens para indivíduos (total e parcial, sendo esta segunda correspondente aos níveis da árvore)*)
+  (*O que fazer em casos em que o nó eliminado for subordinado de algum outro*)
+  (*Propriedade que garante que a rede possua um segundo nó*)
+
+  Variable net_example : net.
+
+  Definition leader_is_in_net := forall n : net, leader n <= nodes n.
+  
+  Definition no_self_superior := forall (n : net) (i : nat), fst (nth i (superior n) (0,0)) <> snd (nth i (superior n) (0,0)).
+  
+  (*Como representar area e location?*)
+
+
+
+
+
+  (*Exemplos de redes*)
+  Definition net_1 : net := Build_net 7 1
+                            ((1 , 2) :: (1 , 3) :: (2 , 4) :: (2 , 5) :: (3 , 6) :: (3 , 7) :: nil)
+                            ((1 , 2) :: (1 , 3) :: (2 , 4) :: (2 , 5) :: (3 , 6) :: (3 , 7) :: nil).
+
+  Definition net_1_scrambled : net := Build_net 7 1
+                                      ((3 , 6) :: (1 , 2) :: (3 , 7) :: (2 , 4) :: (2 , 5) :: (1 , 3) :: nil)
+                                      ((3 , 6) :: (1 , 2) :: (3 , 7) :: (2 , 4) :: (2 , 5) :: (1 , 3) :: nil).
+
+  (*Just for testing*)
+  Definition net_100 : net := Build_net 7 100
+                            ((100 , 200) :: (100 , 300) :: (200 , 400) :: (200 , 500) :: (300 , 600) :: (300 , 700) :: nil)
+                            ((100 , 200) :: (100 , 300) :: (200 , 400) :: (200 , 500) :: (300 , 600) :: (300 , 700) :: nil).
+
+  (*For Testing*)
+  Fixpoint remove_node_from_list (edges : list (nat * nat)) (i : nat) : list (nat * nat) :=
+    match edges with
+      | nil => nil
+      | (a,b) :: edges' => if (Nat.eqb a i) || (Nat.eqb b i)
+                           then remove_node_from_list edges' i
+                           else (a,b) :: remove_node_from_list edges' i
+    end.
+
+  Fixpoint change_leader (edges : list (nat * nat)) (old new : nat) : list (nat * nat) :=
+    match edges with
+      | nil => nil
+      | (a,b) :: edges' => if (Nat.eqb a old) && (Nat.eqb b new)
+                           then change_leader edges' old new
+                           else if (Nat.eqb a old)
+                                then (new,b) :: change_leader edges' old new
+                                else if (Nat.eqb b old)
+                                     then (a,new) :: change_leader edges' old new
+                                     else (a,b) :: change_leader edges' old new
+    end.
+
+  Definition next_leader (n : net) : net := Build_net ((nodes n) - 1) (second_in_command n)
+                                          (change_leader (superior n) (leader n) (second_in_command n))
+                                          (change_leader (knows n) (leader n) (second_in_command n)).
+
+  Fixpoint num_children (edges : list (nat * nat)) (node count : nat) : nat :=
+    match edges with
+      | nil => count
+      | (a,b) :: edges' => if (Nat.eqb a node)
+                           then num_children edges' node (count+1)
+                           else num_children edges' node count
+    end.
+
+  Check leader net_1.
+  Compute leader net_1.
+  Check nodes net_1.
+  Compute nodes net_1.
+  Check second_in_command net_1.
+  Compute second_in_command net_1.
+  Check superior net_1.
+  Compute superior net_1.
+
+  Compute change_leader (superior net_1) (leader net_1) (second_in_command net_1).
+
+  Definition net_2 := next_leader net_1.
+
+  Check leader net_2.
+  Compute leader net_2.
+  Check nodes net_2.
+  Compute nodes net_2.
+  Check second_in_command net_2.
+  Compute second_in_command net_2.
+  Check superior net_2.
+  Compute superior net_2.
+
+  Definition is_top (i : nat) (l : list (nat * nat)) : Prop :=
+  forall j : nat, snd (nth j l (0,0)) <> i.
+
+  Definition leader_is_top (n : net) : Prop := forall i : nat, snd (nth i (superior n) (0,0)) <> leader n.
+  Check leader_is_top.
+  Check leader_is_top net_1.
+  Check leader_is_top net_2.
+
+
+  (*Variable leader_is_top_holds_for_net_1 : leader_is_top net_1.
+  Check leader_is_top_holds_for_net_1.*)
+
+  (*Now use this to prove that it also holds for net_2.*)
+
+  (*Theorem leader_is_top_holds_for_net_2 : leader_is_top net_2.
+  Proof.
+    destruct net_1.
+
+  Qed.*)
+
+  Compute nodes net_1.
+  Compute leader net_1.
+
+  Compute node_level' net_1 1.
+  Compute node_level' net_1 2.
+  Compute node_level' net_1 3.
+  Compute node_level' net_1 4.
+  Compute node_level' net_1 5.
+  Compute node_level' net_1 6.
+  Compute node_level' net_1 7.
+
+  (*Compute node_level net_1 1.
+  Compute node_level net_1 2.
+  Compute node_level net_1 3.
+  Compute node_level net_1 4.
+  Compute node_level net_1 5.
+  Compute node_level net_1 6.
+  Compute node_level net_1 7.*)
+
+  Compute is_parent net_1 1 2.
+
+  Compute is_parent_bool net_1 1 2.
+  Compute is_parent_bool net_1 1 3.
+  Compute is_parent_bool net_1 2 1.
+  Compute is_parent_bool net_1 2 4.
+  Compute is_parent_bool net_1 1 7.
+
+  (*Theorem conserves_leadership_1 : forall (i j : nat) (l : list (nat * nat)), is_top i l -> is_top j (change_leader l i j).
+  Proof.
+    intros n leader_is_top_n.
+    unfold leader_is_top in leader_is_top_n.
+    unfold leader_is_top.
+    intro j.
+  Qed.*) 
+
+  (*Theorem conserves_leadership_2 : forall n : net, leader_is_top n -> leader_is_top (next_leader n).
+  Proof.
+    intros n leader_is_top_n.
+    unfold leader_is_top in leader_is_top_n.
+    unfold leader_is_top.
+    intro j.
+  Qed.*) 
+
+End nets.
